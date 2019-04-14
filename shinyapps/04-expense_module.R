@@ -269,7 +269,7 @@ expenses <- function(input, output, session, user, group, members, cats, api) { 
                               paste0("&store=", store())
                        )
                 ),
-                ifelse(input$edit_notes == "", "", paste0("&notes=", gsub(" ", "%20", input$edit_notes))),
+                ifelse(input$edit_notes == "", "", paste0("&notes=", URLencode(input$item_notes, reserved = T) )),
                        paste0("&root_id=", ifelse(is.na(dat_selected()$root_id), dat_selected()$id, dat_selected()$root_id)),
                        "&mod_user=", user()$uid)
     

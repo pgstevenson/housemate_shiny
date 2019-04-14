@@ -73,8 +73,9 @@ expenseModal <- function(input, output, session, user, group, members, cats, api
                 ifelse(input$item_category == "12",
                        paste0("&store=", input$add_person), # repayment - add user id in store field
                        ifelse(store() == "", "", paste0("&store=", store()))),
-                ifelse(input$item_notes == "", "", paste0("&notes=", gsub(" ", "%20", input$item_notes))),
+                ifelse(input$item_notes == "", "", paste0("&notes=", URLencode(input$item_notes, reserved = T) )),
                 "&mod_user=", user()$uid)
+    
     ## run query
     GET(d) %>% content(type = "text", encoding = "UTF-8") %>% fromJSON() %>% tbl_df()
 
