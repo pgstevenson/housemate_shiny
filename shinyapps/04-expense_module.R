@@ -104,13 +104,20 @@ expenses <- function(input, output, session, user, group, members, cats, api) { 
     # refactor person name, take from group members list
     who_refactored <- sapply(dat$uid, function(x) strsplit(names(members()$li)[members()$li == as.numeric(x)], " ")[[1]][1])
 
+    who <- sapply(dat$uid, function(x) names(members()$li[members()$li == x]))
+    initials <- sapply(who, function(x) {
+      sapply(strsplit(x, " "), function(y) paste0(substr(y, 1, 1), collapse = ""))
+    })
+
     dat %>%
-      mutate(who = who_refactored,
+      mutate(who = who,
+             initials = initials,
              store = stores_refactored,
              description = ifelse(cid == "12", # T: repayment, # F: expense
                                   paste("Repayment:", who, "to", store),
                                   paste(category, ifelse(is.na(store), "", paste("at", store))))
       )
+    
   })
 
   # Stores selectize input
@@ -174,8 +181,9 @@ expenses <- function(input, output, session, user, group, members, cats, api) { 
   
   # Output expenses to data table
   output$expenses <- DT::renderDataTable({
-    DT::datatable(select(dat(), date, description, amount) %>%
-                    rename(Date = date, Store = description, Amount = amount),
+    
+    DT::datatable(select(dat(), date, description, initials, amount) %>%
+                    rename(Date = date, Store = description, Who = initials, Amount = amount),
                   options = list(lengthMenu = c(5, 10),
                                  pageLength = 10),
                   rownames = F,

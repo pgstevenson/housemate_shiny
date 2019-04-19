@@ -42,11 +42,6 @@ user_information <- function(input, output, session, api) {
     need(Sys.getenv("SHINYPROXY_USERNAME"), F)
   )
   
-  # get user information from Google with token
-  # dat <- GET(paste0("https://www.googleapis.com/plus/v1/people/me?access_token=", Sys.getenv()["SHINYPROXY_OIDC_ACCESS_TOKEN"])) %>%
-  #   content(type = "text", encoding = "UTF-8") %>%
-  #   fromJSON()
-  
   # Populate user information
   user <- reactive({
     
@@ -205,7 +200,7 @@ stores <- function(input, output, session, api) {
   output$stores <- renderUI({
     selectizeInput(ns("stores"), label = "Store", choices = NULL, options = list(
     valueField = "id",
-    labelField = "name",
+    labelField = "out",
     searchField = c("name", "city", "entity"),
     options = list(),
     create = FALSE,

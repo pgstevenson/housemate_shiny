@@ -11,8 +11,6 @@ library(shinyjs)
 library(jsonlite) # need to see if I can use googleAuthR to do my own APIs
 library(httr)
 library(tools)
-# library(googleAuthR)
-# library(googleID)
 
 #### helper functions ----
 
@@ -33,7 +31,7 @@ ui <- dashboardPage(
   dashboardHeader(
     title = "Housemate",
     tags$li(class = "dropdown",
-            tags$li(class = "dropdown", actionLink("logout", "Sign Out", onclick = "window.open('/logout', '_blank')")))
+            tags$li(class = "dropdown", actionLink("logout", "Sign Out", onclick = "location.href='https://housemate.pgstevenson.com/logout';")))
   ),
   dashboardSidebar(
     useShinyjs(),
@@ -116,20 +114,8 @@ ui <- dashboardPage(
 
 server <- function(input, output, session) {
 
-  #### Google API Scopes ----
-  # options(googleAuthR.scopes.selected = c("https://www.googleapis.com/auth/userinfo.email",
-  #                                         "https://www.googleapis.com/auth/userinfo.profile"))
-  # options("googleAuthR.client_id" = "1051106373510-im09s2jtrkefktaadhql1uealnc36bsj.apps.googleusercontent.com")
-  # options("googleAuthR.client_secret" = "HefJOj91ZMUN72zfqjLgiqxp")
-  
   #### API address ----
-  # api_host <- "http://localhost:5000"
-  # api_host <- "http://housemate_api:5000"
-  # api_host <- "http://ec2-13-54-159-243.ap-southeast-2.compute.amazonaws.com:5000"
   api_host <- "https://housemate.pgstevenson.com/api"
-  
-  ##### Access token ----
-  # access_token <- user_token()
   
   #### User's details ----
   user <- callModule(user_information,

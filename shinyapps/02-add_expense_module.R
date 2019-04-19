@@ -7,6 +7,7 @@ expenseModalUI <- function(id) {
 
 expenseModal <- function(input, output, session, user, group, members, cats, api) {
   ns <- session$ns
+  
   myModal <- function() {
     modalDialog(
       fluidRow(
@@ -97,6 +98,9 @@ expenseModal <- function(input, output, session, user, group, members, cats, api
     }
   })
   
-  return(NULL)
+  # Clear cateogry drop down when clicked
+  shinyjs::onclick("item_category", {
+    updateSelectInput(session, "item_category", selected = "")
+  })
   
 }
