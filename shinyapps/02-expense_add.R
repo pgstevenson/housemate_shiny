@@ -53,9 +53,10 @@ expenseModal <- function(input, output, session, user, group, members, cats, api
              api = api)
   
   # open modal on button click
-  observeEvent(input$expenses_add,
+  observeEvent(input$expenses_add, {
+               print(dat$expenses)
                showModal(myModal())
-  )
+  })
   
   # write output to db
   observeEvent(input$add_ok, {
@@ -127,7 +128,6 @@ expenseModal <- function(input, output, session, user, group, members, cats, api
     updateSelectInput(session, "item_category", selected = "")
   })
   
-  observe({ print(new_item()) })
   return(reactive({ new_item() }))
   
 }

@@ -80,6 +80,7 @@ ui <- dashboardPage(
                 box(
                   expenses_tableOutput("expenses_list"),
                   new_item_idOuput("add_expense"),
+                  edit_item_idOuput("expenses_list"),
                   width = 7),
                 box(
                   expenses_splitOutput("expenses_summary_plot"),
@@ -213,10 +214,20 @@ server <- function(input, output, session) {
   })
   
   #### Edit user's expenses
-  callModule(expenses,
+  dat_edit_item <- callModule(expenses,
              "expenses_list",
              dat = dat,
              api = api_host)
+  
+  # update dat$expenses with deleted/new item
+  observeEvent(dat_edit_item(), {
+    dat$expenses <- bind_rows(
+      dat$expenses %>% select(-who, -initials, -description),
+      dat_edit_item()$new_item %>% mutate(date = ymd(date))
+    ) %>%
+      filter(id != dat_edit_item()$deleted_id) %>%
+      dat_refactor(members = dat$members)
+  })
  
   #### "Add expense" modal ----
   dat_new_item <- callModule(expenseModal,
@@ -227,7 +238,7 @@ server <- function(input, output, session) {
                                       cats = dat$categories,
                                       api = api_host)
   
-  # #### master reactive for expenses table ----
+  # update dat$expenses with new item
   observeEvent(dat_new_item(), {
     dat$expenses <- bind_rows(
       dat$expenses %>% select(-who, -initials, -description),

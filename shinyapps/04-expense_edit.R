@@ -68,8 +68,14 @@ itemEditUI <- function(id) {
   ))
 }
 
+edit_item_idOuput <- function(id) {
+  ns <- NS(id)
+  textInput(ns("edit_item_id"), label = "Edit")
+}
+
 # Main logic for expenses
 expenses <- function(input, output, session, dat, api) { #### new user variable, add to call.
+  
   ns <- session$ns
 
   # Stores selectize input
@@ -207,20 +213,40 @@ expenses <- function(input, output, session, dat, api) { #### new user variable,
                        ifelse(input$edit_category == "" || input$edit_category == "NA", "", paste0("&cid=", input$edit_category))),
                 ifelse(repayment_flag,
                        paste0("&store=", input$edit_person), # edit repayment - store field contains uid
-                       ifelse(store() == "", 
+                       ifelse(store() == "",
                               ifelse(is.na(dat_selected()$sid), "", paste0("&store=", dat_selected()$sid)),
                               paste0("&store=", store())
                        )
                 ),
-                ifelse(input$edit_notes == "", "", paste0("&notes=", URLencode(input$item_notes, reserved = T) )),
-                       paste0("&root_id=", ifelse(is.na(dat_selected()$root_id), dat_selected()$id, dat_selected()$root_id)),
-                       "&mod_user=", dat$user$uid)
+                ifelse(input$edit_notes == "", "", paste0("&notes=", URLencode(input$edit_notes, reserved = T))),
+                paste0("&root_id=", ifelse(is.na(dat_selected()$root_id), dat_selected()$id, dat_selected()$root_id)),
+                "&mod_user=", dat$user$uid)
     
     ## run query
-    GET(d) %>% content(type = "text", encoding = "UTF-8") %>% fromJSON() %>% as_tibble()
+    response <- GET(d) %>% content(type = "text", encoding = "UTF-8") %>% fromJSON() %>% as_tibble()
+    
+    # Write id of (deleted,new) items to text input
+    updateTextInput(session, "edit_item_id", value = paste(dat_selected()$id, response$id, sep = ","))
     
     shinyjs::hide("edit_div")
     shinyjs::show("intro_screen")
+    
+  })
+  
+  # call api for new record's data
+  # Append this to dat_expenses (or return from module to append in parent namespace)
+  new_item <- reactive({
+    
+    shiny::validate(need(input$edit_item_id, F))
+
+    ids <- strsplit(input$edit_item_id, ",")[[1]]
+    
+    dat_new <- GET(paste0(api, "/v1/expenses?id=", ids[2])) %>%
+      content(type = "text", encoding = "UTF-8") %>%
+      fromJSON() %>%
+      as_tibble()
+    
+    list(deleted_id = ids[1], new_item = dat_new)
     
   })
   
@@ -241,5 +267,7 @@ expenses <- function(input, output, session, dat, api) { #### new user variable,
     shinyjs::show("intro_screen")
     
   })
+  
+  return(reactive({ new_item() }))
   
 }
