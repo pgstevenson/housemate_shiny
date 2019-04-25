@@ -28,154 +28,6 @@ user_token <- function(input, output, session) {
   
 }
 
-#' User Information
-#' get user information from email address supplied at loggin
-#' 
-#' uses /v1/users and /v1/groups apis
-#' 
-#' returns reactive
-#' 
-user_information <- function(input, output, session, api) {
-  
-  # validate
-  shiny::validate(
-    need(Sys.getenv("SHINYPROXY_USERNAME"), F)
-  )
-  
-  # Populate user information
-  user <- reactive({
-    
-    # get user's information
-    user_df <- GET(paste0(api, "/v1/users?email=", Sys.getenv("SHINYPROXY_USERNAME"))) %>%
-      content(type = "text", encoding = "UTF-8") %>%
-      fromJSON() %>%
-      tbl_df()
-    
-    # new user
-    if ("code" %in% names(user_df))
-      if (user_df$code == 204)
-        user_df <- GET(paste0(api_host, "/v1/users_new?email=", Sys.getenv("SHINYPROXY_USERNAME"))) %>%
-          content(type = "text", encoding = "UTF-8") %>%
-          fromJSON() %>%
-          tbl_df()
-    
-    # get user's groups
-    groups_df <- GET(paste0(api, "/v1/groups?email=", Sys.getenv("SHINYPROXY_USERNAME"))) %>%
-      content(type = "text", encoding = "UTF-8") %>%
-      fromJSON() %>%
-      tbl_df()
-    
-    # new group
-    if ("code" %in% names(groups_df))
-      if (groups_df$code == 204) {
-        groups_df <- GET(paste0(api_host, "/v1/group_new")) %>%
-          content(type = "text", encoding = "UTF-8") %>%
-          fromJSON() %>%
-          tbl_df()
-        # link user to new group as admin
-        GET(paste0(api, "/v1/expenses/new_user_group?uid=", user_df$uid, "&gid=", groups_df$gid))
-        # place first item in expenses
-        GET(paste0(api, "/v1/expenses/new?uid=", user_df$uid, "&gid=", groups_df$gid, "&date=", gsub("-", "", Sys.Date()), "&cid=9&amount=0&notes=First%20expense"))
-      }
-
-    # resturcture groups as a named list
-    groups <- as.list(groups_df$gid)
-    names(groups) <- groups_df$name
-    
-    list(
-      uid = user_df$uid,
-      given_name = user_df$first,
-      family_name = user_df$last,
-      # dob = ymd(dat$birthday),
-      # gender = dat$gender,
-      # image_url = dat$image$url,
-      email = Sys.getenv("SHINYPROXY_USERNAME"),
-      group = groups
-    )
-  })
-  
-  return(user)
-  
-}
-
-#' List of categories to populate select input(s)
-#' 
-#' Retturns a named list of categories
-#' 
-#' Gets data from /v1/categories api
-#' 
-#' Created by Paul Stevenos 16-Mar-2019
-#' 
-categories <- function(input, output, session, api) {
-  # validate
-  shiny::validate(
-    need(api, F)
-  )
-  
-  cat <- GET(paste0(api, "/v1/categories")) %>%
-    content(type = "text", encoding = "UTF-8") %>%
-    fromJSON() %>%
-    tbl_df()
-  cats <- list(cat$cid)[[1]]
-  names(cats) <- cat$category
-  cats <- c("None" = NA_integer_, cats)
-  
-  return(cats)
-  
-}
-
-#' Populate a Select Input with the groups to which the user belongs
-#' returns a reactive with the group number as a named vecotr (integer)
-#'  
-#' Created by Paul Stevenson 15-Mar-2019
-#' 
-groupsUI <- function(id) {
-  ns <- NS(id)
-  shinyjs::hidden(
-    tags$div(
-      id = ns("groups_select"),
-      uiOutput(ns("groups"))
-    )
-  )
-}
-
-groups <- function(input, output, session, user) {
-  ns <- session$ns
-  
-  dat <- reactive({
-    # Validate
-    shiny::validate(
-      need(user(), F)
-    )
-    
-    # Get groups that the user belongs to
-    user()$group
-  })
-  
-  # render select input
-  output$groups <- renderUI({
-    selectInput(ns("groups"),
-                label = "Your Groups:",
-                choices = dat(),
-                selected = NULL)
-  })
-  
-  # update the returned value with the input's selected value
-  dat2 <- eventReactive(input$groups, {
-    dat()[dat() == input$groups]
-  })
-  
-  # By default, the dropdown box with available groups is hidden, if the user
-  # belongs to more than 1 group then show the select input
-  observe({
-    if(length(dat()) > 1)
-      shinyjs::show("groups_select")
-  })
-  
-  return(reactive({ ifelse(length(dat()) > 1, dat2(), dat()) }))
-  
-}
-
 #' Defines the stores selectize input with UI and server functions
 #' 
 #' Gets data from /v1/stores api
@@ -252,38 +104,31 @@ expenses_splitOutput <- function(id) {
 }
 
 expenses_split <- function(input, output, session, dat, members, api) {
-  
-  reactive({
-    shiny::validate(
-      need(dat(), F),
-      need(members(), F)
-    )
-  })
-  
+
   output$summary_plot <- renderPlot({
-    members()$df %>%
+    members$df %>%
       left_join(
         # Summary of total individual expenses paid
-        dat() %>%
+        dat %>%
           group_by(uid) %>%
           filter(cid != "12") %>%
           summarise(individual_total_expense = sum(amount, na.rm = T)),
         by = "uid") %>%
       left_join(
         # Summary of who has recieved a repayment
-        dat() %>%
+        dat %>%
           filter(cid == "12") %>%
           group_by(sid) %>%
           summarise(received = sum(amount, na.rm = T)),
         by = c("uid" = "sid")) %>%
       left_join(
         # Summary of who has made repayments
-        dat() %>%
+        dat %>%
           filter(cid == "12") %>%
           group_by(uid) %>%
           summarise(repaid = sum(amount, na.rm = T)),
         by = "uid") %>%
-      mutate(group_total = dat() %>% # total amount spent by group
+      mutate(group_total = dat %>% # total amount spent by group
                filter(cid != "12") %>%
                summarise(total = sum(amount, na.rm = T)) %>%
                .$total,
@@ -309,4 +154,39 @@ expenses_split <- function(input, output, session, dat, members, api) {
             axis.ticks.x = element_blank())
   })
   
+}
+
+#' Refactor expenses data
+#' 
+#' input dat tibble
+#' return dat tibble
+#' 
+dat_refactor <- function(dat, members) {
+  
+  # replace store names with person paid when categroy = 12: Repayment
+  stores_refactored <- apply(dat, 1, function(x) {
+    if (is.na(x["cid"]) | x["cid"] != "12") return(x["store"])
+    strsplit(names(members$li)[members$li == as.numeric(x["sid"])], " ")[[1]][1]
+  }) %>%
+    unlist() %>%
+    unname()
+  
+  # refactor person name, take from group members list
+  who_refactored <- sapply(dat$uid, function(x) strsplit(names(members$li)[members$li == as.numeric(x)], " ")[[1]][1])
+  
+  who <- sapply(dat$uid, function(x) names(members$li[members$li == x]))
+  initials <- sapply(who, function(x) {
+    sapply(strsplit(x, " "), function(y) paste0(substr(y, 1, 1), collapse = ""))
+  })
+  
+  dat %>%
+    mutate(date = ymd(date),
+           who = who,
+           initials = initials,
+           store = stores_refactored,
+           description = ifelse(cid == "12", # T: repayment, # F: expense
+                                paste("Repayment:", who, "to", store),
+                                paste(category, ifelse(is.na(store), "", paste("at", store))))
+    ) %>%
+    arrange(desc(date))
 }

@@ -14,9 +14,11 @@ library(tools)
 
 #### helper functions ----
 
-source("02-add_expense_module.R")
-source("03-expense_summary_modules.R")
-source("04-expense_module.R")
+source("02-expense_add.R")
+source("03-expense_summary.R")
+source("04-expense_edit.R")
+source("05-expense_table.R")
+source("06-dat_initiation.R")
 source("99-helper.R")
 
 #### env variables for dev ----
@@ -76,7 +78,8 @@ ui <- dashboardPage(
               titlePanel(textOutput("expenses_title")),
               fluidRow(
                 box(
-                  expensesOutput("expenses_list"),
+                  expenses_tableOutput("expenses_list"),
+                  new_item_idOuput("add_expense"),
                   width = 7),
                 box(
                   expenses_splitOutput("expenses_summary_plot"),
@@ -117,98 +120,155 @@ server <- function(input, output, session) {
   #### API address ----
   api_host <- "https://housemate.pgstevenson.com/api"
   
-  #### User's details ----
-  user <- callModule(user_information,
-                     "user",
+  #### Init reactive values ----
+  dat <- reactiveValues()
+  
+  # User's details
+  user_information_returned <- callModule(user_information,
+                                          "user",
+                                          api = api_host)
+  observe({
+    shiny::validate(need(user_information_returned, F))
+    dat$user <- user_information_returned$user
+  })
+  
+  # Groups user belongs to
+  groups_returned <- callModule(groups,
+                           "user_groups",
+                           user = dat$user)
+  
+  # Expense category drop-down
+  categories_returned <- callModule(categories,
+                     "cats",
                      api = api_host)
   
-  #### groups user belongs to ----
-  groups <- callModule(groups,
-                       "user_groups",
-                       user = user)
+  observe({
+    shiny::validate(need(groups_returned, F),
+                    need(categories_returned, F))
+    dat$group <- groups_returned$group
+    dat$categories <- categories_returned$categories
+  })
   
-  #### members of selected group ----
-  members <- reactive({
-    shiny::validate(
-      need(groups(), F)
-    )
-    df <- GET(paste0(api_host, "/v1/group_members?gid=", groups())) %>%
+  # members of selected group
+  observe({
+    shiny::validate(need(dat$group, F))
+    
+    df <- GET(paste0(api_host, "/v1/group_members?gid=", dat$group)) %>%
       content(type = "text", encoding = "UTF-8") %>%
       fromJSON() %>%
-      tbl_df()
+      as_tibble()
     
     li <- df$uid
     names(li) <- paste(df$first, df$last)
     
-    list(df = df, li = li)
-    
+    dat$members <- list(df = df, li = li)
   })
   
-  #### populate category drop-down ----
-  cats <- callModule(categories,
-                     "cats",
-                     api = api_host)
+  # Group's expenses
+  observe({
+    shiny::validate(
+      need(dat$group, F),
+      need(dat$members, F)
+    )
+    
+    dat_expenses <- GET(paste0(api_host, "/v1/expenses?gid=", dat$group)) %>%
+      content(type = "text", encoding = "UTF-8") %>%
+      fromJSON() %>%
+      as_tibble() %>%
+      dat_refactor(members = dat$members)
+    
+    dat$expenses <- dat_expenses
+    
+  })
   
   #### Expenses pane title text ----
   output$expenses_title <- renderText({
     shiny::validate(
-      need(groups(), F)
+      need(dat$user, F),
+      need(dat$group, F)
     )
-    paste("Expenses for", names(user()$group[groups()[[1]]])) %>% toTitleCase()
+    paste("Expenses for", names(dat$user$group[dat$group[[1]]])) %>% toTitleCase()
   })
   
   #### Analytics pane title text ----
   output$analytics_title <- renderText({
     shiny::validate(
-      need(groups(), F)
+      need(dat$group, F)
     )
-    paste("Analytics for", names(groups()), "expenses") %>% toTitleCase()
+    paste("Analytics for", names(dat$group), "expenses") %>% toTitleCase()
   })
   
   #### print user's name in side bar ----
   output$user_name <- renderUI({
     shiny::validate(
-      need(user(), F)
+      need(dat$user, F)
     )
-    tags$h1(paste("Hi", user()$given_name))
+    tags$h1(paste("Hi", dat$user$given_name))
   })
-
-  #### Data Table containing all of group's expenses (returns a dataframe object) ---
-  dat_expenses <- callModule(expenses,
-                             "expenses_list",
-                             user = user,
-                             group = groups,
-                             members = members,
-                             cats = cats,
-                             api = api_host)
+  
+  #### render data table ----
+  observe({
+    shiny::validate(need(dat$expenses, F))
+    callModule(expenses_table, "expenses_list", dat = dat$expenses)
+  })
+  
+  #### Edit user's expenses
+  callModule(expenses,
+             "expenses_list",
+             dat = dat,
+             api = api_host)
+ 
+  #### "Add expense" modal ----
+  dat_new_item <- callModule(expenseModal,
+                                      "add_expense",
+                                      user = dat$user,
+                                      group = dat$group,
+                                      members = dat$members,
+                                      cats = dat$categories,
+                                      api = api_host)
+  
+  # #### master reactive for expenses table ----
+  observeEvent(dat_new_item(), {
+    dat$expenses <- bind_rows(
+      dat$expenses %>% select(-who, -initials, -description),
+      dat_new_item() %>% mutate(date = ymd(date))
+    ) %>%
+      dat_refactor(members = dat$members)
+  })
   
   #### Plot of Expenses by person and balance ----
-  callModule(expenses_split,
-             "expenses_summary_plot",
-             dat = dat_expenses,
-             members = members,
-             api = api_host)
-  
-  #### "Add expense" modal ----
-  callModule(expenseModal,
-             "add_expense",
-             user = user,
-             group = groups,
-             members = members,
-             cats = cats,
-             api = api_host)
+  observe({
+    shiny::validate(need(dat$expenses, F),
+                    need(dat$members, F))
+    
+    callModule(expenses_split,
+               "expenses_summary_plot",
+               dat = dat$expenses,
+               members = dat$members,
+               api = api_host)
+  })
   
   #### Summary of monthly expenses by month and person ----
-  callModule(summary_month_person,
-             "month_person",
-             group = groups,
-             api = api_host)
+  observe({
+    shiny::validate(need(dat$group, F),
+                    need(!(dat$group %in% c("a")), F))
+    
+    callModule(summary_month_person,
+               "month_person",
+               group = dat$group,
+               api = api_host)
+  })
   
   #### Summary of monthly expenses by month and category ----
-  callModule(summary_month_category,
-             "month_category",
-             group = groups,
-             api = api_host)
+  observe({
+    shiny::validate(need(dat$group, F),
+                    need(!(dat$group %in% c("a")), F))
+    
+    callModule(summary_month_category,
+               "month_category",
+               group = dat$group,
+               api = api_host)
+  })
   
   #### add store window (placeholder, doesn't do anyhting PGS 15-Mar-19) ----
   storeModal <- function() {
