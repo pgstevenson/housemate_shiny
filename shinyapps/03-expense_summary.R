@@ -96,7 +96,7 @@ summary_month_category <- function(input, output, session, group, api) {
     # Wrangle
     values$expense_summary <- dat %>%
       arrange(category, desc(month)) %>%
-      mutate(date = paste0(month, "01") %>% ymd(),
+      mutate(date = paste(month, "01", sep = "-") %>% ymd(),
              category = factor(category))
 
   })

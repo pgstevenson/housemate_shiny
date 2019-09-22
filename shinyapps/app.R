@@ -119,7 +119,8 @@ ui <- dashboardPage(
 server <- function(input, output, session) {
 
   #### API address ----
-  api_host <- "https://housemate.pgstevenson.com/api"
+  # api_host <- "https://housemate.pgstevenson.com/api"
+  api_host <- "http://192.168.0.17:5000/api"
   
   #### Init reactive values ----
   dat <- reactiveValues()
