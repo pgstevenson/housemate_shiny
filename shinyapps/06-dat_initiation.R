@@ -19,7 +19,7 @@ categories <- function(input, output, session, api) {
     content(type = "text", encoding = "UTF-8") %>%
     fromJSON() %>%
     tbl_df()
-  cats <- list(cat$cid)[[1]]
+  cats <- list(cat$category_id)[[1]]
   names(cats) <- cat$category
   cats <- c("None" = NA_integer_, cats)
   
@@ -140,11 +140,11 @@ user_information <- function(input, output, session, api) {
         }
       
       # resturcture groups as a named list
-      groups <- as.list(groups_df$gid)
+      groups <- as.list(groups_df$group_id)
       names(groups) <- groups_df$name
       
       dat$user <- list(
-        uid = user_df$uid,
+        uid = user_df$user_id,
         given_name = user_df$first,
         family_name = user_df$last,
         # dob = ymd(dat$birthday),

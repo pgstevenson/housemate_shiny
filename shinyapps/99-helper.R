@@ -110,31 +110,31 @@ expenses_split <- function(input, output, session, dat, members, api) {
       left_join(
         # Summary of total individual expenses paid
         dat %>%
-          group_by(uid) %>%
-          filter(cid != "12") %>%
+          group_by(user_id) %>%
+          filter(category_id != "12") %>%
           summarise(individual_total_expense = sum(amount, na.rm = T)),
-        by = "uid") %>%
+        by = "user_id") %>%
       left_join(
         # Summary of who has recieved a repayment
         dat %>%
-          filter(cid == "12") %>%
-          group_by(sid) %>%
+          filter(category_id == "12") %>%
+          group_by(store_id) %>%
           summarise(received = sum(amount, na.rm = T)),
-        by = c("uid" = "sid")) %>%
+        by = c("user_id" = "store_id")) %>%
       left_join(
         # Summary of who has made repayments
         dat %>%
-          filter(cid == "12") %>%
-          group_by(uid) %>%
+          filter(category_id == "12") %>%
+          group_by(user_id) %>%
           summarise(repaid = sum(amount, na.rm = T)),
-        by = "uid") %>%
+        by = "user_id") %>%
       mutate(group_total = dat %>% # total amount spent by group
-               filter(cid != "12") %>%
+               filter(category_id != "12") %>%
                summarise(total = sum(amount, na.rm = T)) %>%
                .$total,
              group_size = nrow(.), # number of people in the group
              individual_owing = group_total/group_size) %>% # split evenly, how much each person owns
-      group_by(uid, first, last) %>%
+      group_by(user_id, first, last) %>%
       summarise(balance = sum(individual_total_expense, na.rm = T) -
                   individual_owing - 
                   sum(received, na.rm = T) +
@@ -165,16 +165,16 @@ dat_refactor <- function(dat, members) {
   
   # replace store names with person paid when categroy = 12: Repayment
   stores_refactored <- apply(dat, 1, function(x) {
-    if (is.na(x["cid"]) | x["cid"] != "12") return(x["store"])
-    strsplit(names(members$li)[members$li == as.numeric(x["sid"])], " ")[[1]][1]
+    if (is.na(x["category_id"]) | x["category_id"] != "12") return(x["store"])
+    strsplit(names(members$li)[members$li == as.numeric(x["store_id"])], " ")[[1]][1]
   }) %>%
     unlist() %>%
     unname()
   
   # refactor person name, take from group members list
-  who_refactored <- sapply(dat$uid, function(x) strsplit(names(members$li)[members$li == as.numeric(x)], " ")[[1]][1])
+  who_refactored <- sapply(dat$user_id, function(x) strsplit(names(members$li)[members$li == as.numeric(x)], " ")[[1]][1])
   
-  who <- sapply(dat$uid, function(x) names(members$li[members$li == x]))
+  who <- sapply(dat$user_id, function(x) names(members$li[members$li == x]))
   initials <- sapply(who, function(x) {
     sapply(strsplit(x, " "), function(y) paste0(substr(y, 1, 1), collapse = ""))
   })
@@ -184,7 +184,7 @@ dat_refactor <- function(dat, members) {
            who = who,
            initials = initials,
            store = stores_refactored,
-           description = ifelse(cid == "12", # T: repayment, # F: expense
+           description = ifelse(category_id == "12", # T: repayment, # F: expense
                                 paste("Repayment:", who, "to", store),
                                 paste(category, ifelse(is.na(store), "", paste("at", store))))
     ) %>%

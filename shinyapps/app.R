@@ -160,7 +160,7 @@ server <- function(input, output, session) {
       fromJSON() %>%
       as_tibble()
     
-    li <- df$uid
+    li <- df$user_id
     names(li) <- paste(df$first, df$last)
     
     dat$members <- list(df = df, li = li)
@@ -222,10 +222,12 @@ server <- function(input, output, session) {
   
   # update dat$expenses with deleted/new item
   observeEvent(dat_edit_item(), {
-    dat$expenses <- bind_rows(
-      dat$expenses %>% select(-who, -initials, -description),
-      dat_edit_item()$new_item %>% mutate(date = ymd(date))
-    ) %>%
+    
+    if (!is.na(dat_edit_item()$new_item))
+      dat$expenses <- bind_rows(dat$expenses %>% select(-who, -initials, -description),
+                                dat_edit_item()$new_item %>% mutate(date = ymd(date)))
+    
+    dat$expenses <- dat$expenses %>%
       filter(id != dat_edit_item()$deleted_id) %>%
       dat_refactor(members = dat$members)
   })

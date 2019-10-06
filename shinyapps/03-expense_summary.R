@@ -21,10 +21,10 @@ summary_month_person <- function(input, output, session, group, api) {
     # fill in missing values with 0 (i.e. if a person did not make any purchases in a given month)
     dat <- full_join(dat,
                      expand.grid(month = unique(dat$month),
-                                 person = unique(dat$person),
+                                 first = unique(dat$first),
                                  stringsAsFactors = F) %>%
                        as_tibble(),
-                     by = c("month", "person"))
+                     by = c("month", "first"))
     
     # if NAs, then replace with 0
     if (sum(is.na(dat$sum)) > 0)
@@ -34,9 +34,9 @@ summary_month_person <- function(input, output, session, group, api) {
     values$expenses_summary <- left_join(dat, dat %>% group_by(month) %>% summarise(tot = sum(sum, na.rm = T)),
                                          by = "month") %>%
       mutate(month = paste0(month, "01") %>% ymd(),
-             contribution = sum - tot / length(unique(dat$person))) %>%
+             contribution = sum - tot / length(unique(dat$first))) %>%
       select(-tot, -sum) %>%
-      spread(key = person, value = contribution) %>%
+      spread(key = first, value = contribution) %>%
       arrange(desc(month)) %>%
       mutate(month = format(month, "%B %Y")) %>% # Date Month YYYY format
       rename("Month" = "month")

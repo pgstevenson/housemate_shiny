@@ -89,7 +89,7 @@ expenses <- function(input, output, session, dat, api) { #### new user variable,
     selectInput(ns("edit_uid"),
                 label = "Paid by",
                 choices = dat$members$li,
-                selected = dat_selected()$uid)
+                selected = dat_selected()$user_id)
   })
   
   # Render edit amount numeric input
@@ -107,17 +107,17 @@ expenses <- function(input, output, session, dat, api) { #### new user variable,
     selectInput(ns("edit_category"),
                 label = "Expense type",
                 choices = dat$categories[dat$categories != "12"], # remove "Repayment" option from dropdown
-                selected = dat_selected()$cid
+                selected = dat_selected()$category_id
                 )
   })
   
   # Render display current store (would rather populate selectize, but don't think I can PGS 17-Mar-2019)
   output$display_store <- renderText({
     shiny::validate(
-      need(dat_selected()$sid, F),
-      need(dat_selected()$cid != "12", F) # don't pre-populate if original category is repayment
+      need(dat_selected()$store_id, F),
+      need(dat_selected()$category_id != "12", F) # don't pre-populate if original category is repayment
     )
-    dat_store <- GET(paste0(api, "/v1/stores?id=", dat_selected()$sid)) %>%
+    dat_store <- GET(paste0(api, "/v1/stores?id=", dat_selected()$store_id)) %>%
       content(type = "text", encoding = "UTF-8") %>%
       fromJSON() %>%
       as_tibble()
@@ -129,7 +129,7 @@ expenses <- function(input, output, session, dat, api) { #### new user variable,
     selectInput(ns("edit_person"),
                 label = "To",
                 choices = dat$members$li,
-                selected = dat_selected()$sid)
+                selected = dat_selected()$store_id)
   })
   
   # Render edit notes
@@ -150,11 +150,11 @@ expenses <- function(input, output, session, dat, api) { #### new user variable,
       shinyjs::show("intro_screen")
     } else {
       d <- dat_selected()
-      output$item_category_store <- renderText({ ifelse(d$cid == "12",
-                                                        paste(d$category, "to", names(members$li)[members$li == d$sid]), # repayment category
+      output$item_category_store <- renderText({ ifelse(d$category_id == "12",
+                                                        paste(d$category, "to", names(dat$members$li)[dat$members$li == d$store_id]), # repayment category
                                                         paste(d$category, ifelse(is.na(d$store), "", paste("at", d$store)))) })
       output$item_amount <- renderText({ paste0("$", format(round(d$amount, 2), nsmall = 2, big.mark=",")) })
-      output$item_who_date <- renderText({ paste("by", names(dat$members$li)[dat$members$li == d$uid], "on", format(as.Date(d$date), "%d %B %Y")) }) # DD Month YYYY format
+      output$item_who_date <- renderText({ paste("by", names(dat$members$li)[dat$members$li == d$user_id], "on", format(as.Date(d$date), "%d %B %Y")) }) # DD Month YYYY format
       output$item_notes <- renderText({ if (!is.na(d$notes)) d$notes else "" })
       shinyjs::hide("intro_screen")
       shinyjs::show("item_div")
@@ -163,8 +163,8 @@ expenses <- function(input, output, session, dat, api) { #### new user variable,
   
   # Show edit expense item div
   observeEvent(input$expenses_edit, {
-    repayment_flag <- ifelse(!is.na(dat_selected()$cid),
-                             ifelse(dat_selected()$cid == "12", T, F),
+    repayment_flag <- ifelse(!is.na(dat_selected()$category_id),
+                             ifelse(dat_selected()$category_id == "12", T, F),
                              F)
     shinyjs::show("edit_div")
     shinyjs::hide("item_div")
@@ -190,8 +190,8 @@ expenses <- function(input, output, session, dat, api) { #### new user variable,
 
     req(input$edit_uid, input$edit_date, input$edit_amount, !is.na(suppressWarnings(as.numeric(input$edit_amount))))
     
-    repayment_flag <- ifelse(!is.na(dat_selected()$cid),
-                             ifelse(dat_selected()$cid == "12", T, F),
+    repayment_flag <- ifelse(!is.na(dat_selected()$category_id),
+                             ifelse(dat_selected()$category_id == "12", T, F),
                              F)
     
     # remove initial entry
@@ -214,7 +214,7 @@ expenses <- function(input, output, session, dat, api) { #### new user variable,
                 ifelse(repayment_flag,
                        paste0("&store=", input$edit_person), # edit repayment - store field contains uid
                        ifelse(store() == "",
-                              ifelse(is.na(dat_selected()$sid), "", paste0("&store=", dat_selected()$sid)),
+                              ifelse(is.na(dat_selected()$store_id), "", paste0("&store=", dat_selected()$store_id)),
                               paste0("&store=", store())
                        )
                 ),
@@ -239,13 +239,15 @@ expenses <- function(input, output, session, dat, api) { #### new user variable,
     
     shiny::validate(need(input$edit_item_id, F))
 
+    dat_new <- NA
     ids <- strsplit(input$edit_item_id, ",")[[1]]
     
-    dat_new <- GET(paste0(api, "/v1/expenses?id=", ids[2])) %>%
-      content(type = "text", encoding = "UTF-8") %>%
-      fromJSON() %>%
-      as_tibble()
-    
+    if (length(ids) > 1)
+      dat_new <- GET(paste0(api, "/v1/expenses?id=", ids[2])) %>%
+        content(type = "text", encoding = "UTF-8") %>%
+        fromJSON() %>%
+        as_tibble()
+      
     list(deleted_id = ids[1], new_item = dat_new)
     
   })
@@ -262,6 +264,9 @@ expenses <- function(input, output, session, dat, api) { #### new user variable,
       content(type = "text", encoding = "UTF-8") %>%
       fromJSON() %>%
       as_tibble()
+    
+    # Write id of (deleted,new) items to text input
+    updateTextInput(session, "edit_item_id", value = as.character(dat_selected()$id))
     
     shinyjs::hide("edit_div")
     shinyjs::show("intro_screen")
