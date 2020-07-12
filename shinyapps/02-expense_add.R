@@ -18,6 +18,7 @@ expenseModal <- function(input, output, session, user, group, members, cats, api
     modalDialog(
       fluidRow(
         column(12,
+               shinyjs::hidden(radioButtons(ns("store_choice"), "existing", choices = c("existing", "new"), selected = "existing")),
                dateInput(ns("item_date"), "Date", format = "dd MM yyyy")
         )),
       fluidRow(
@@ -31,14 +32,22 @@ expenseModal <- function(input, output, session, user, group, members, cats, api
       fluidRow(
         column(12,
                tags$div(id = ns("add_stores"),
-                       storesUI(ns("add_stores"))),
+                        storesUI(ns("add_stores"))),
                shinyjs::hidden(tags$div(id = ns("add_person"),
-                       selectInput(ns("add_person"), label = "To",
-                                   choices = members$li[members$li != user$uid]))) # exclude current user from list
+                                        selectInput(ns("add_person"), label = "To",
+                                                    choices = members$li[members$li != user$uid]))), # exclude current user from list
+               
+               actionButton(ns("new_store"), "Add New Store"),
+               shinyjs::hidden(tags$div(id = ns("new_store_div"),
+                                             textInput(ns("store_name"), "Store"),
+                                             textInput(ns("store_entity"), "Entity"),
+                                             textInput(ns("store_city"), "Suburb"),
+                                             actionButton(ns("cancel_store"), "Cancel"),
+                                        style = "border: 1px solid #CCC; padding: 8px;"))
         )),
       fluidRow(
         column(12,
-                textInput(ns("item_notes"), "Notes", value = ""))
+               textInput(ns("item_notes"), "Notes", value = ""))
       ),
       footer = tagList(
         modalButton("Cancel"),
@@ -54,20 +63,44 @@ expenseModal <- function(input, output, session, user, group, members, cats, api
   
   # open modal on button click
   observeEvent(input$expenses_add, {
-               print(dat$expenses)
-               showModal(myModal())
+    showModal(myModal())
+  })
+  
+  # toggle between existing/new stores inputs
+  
+  observeEvent(input$new_store, { updateRadioButtons(session, "store_choice", selected = "new") })
+  observeEvent(input$cancel_store, { updateRadioButtons(session, "store_choice", selected = "existing") })
+  
+  observeEvent(input$store_choice, {
+    if (input$store_choice == "existing") {
+      shinyjs::hide("new_store_div")
+      shinyjs::show("add_stores")
+      shinyjs::show("new_store")
+    } else {
+      shinyjs::show("new_store_div")
+      shinyjs::hide("add_stores")
+      shinyjs::hide("new_store")
+    }
   })
   
   # write output to db
   observeEvent(input$add_ok, {
     if (isTruthy(input$item_date))
-      shinyjs::runjs("document.getElementById('item_date').style.border = ''") else
-        shinyjs::runjs("document.getElementById('item_date').style.border = '1px solid red'")
+      shinyjs::runjs("document.getElementById('add_expense-item_date').style.border = ''") else
+        shinyjs::runjs("document.getElementById('add_expense-item_date').style.border = '1px solid red'")
     if (input$item_amount != "" && !is.na(suppressWarnings(as.numeric(input$item_amount))))
-      shinyjs::runjs("document.getElementById('item_amount').style.border = ''") else
-        shinyjs::runjs("document.getElementById('item_amount').style.border = '1px solid red'")
+      shinyjs::runjs("document.getElementById('add_expense-item_amount').style.border = ''") else
+        shinyjs::runjs("document.getElementById('add_expense-item_amount').style.border = '1px solid red'")
+    if (input$store_choice == "new")
+      if (isTruthy(input$store_name))
+        shinyjs::runjs("document.getElementById('add_expense-store_choice').style.border = ''") else
+          shinyjs::runjs("document.getElementById('add_expense-store_choice').style.border = '1px solid red'")
 
     req(input$item_date, input$item_amount, !is.na(suppressWarnings(as.numeric(input$item_amount))))
+    
+    if (input$store_choice == "new")
+      req(input$store_name)
+      
 
     # write expense to database
     ## prepare query
